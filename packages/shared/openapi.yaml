@@ -35,7 +35,185 @@ tags:
   - name: points
     description: Solde et historique du ledger de points
 
-paths: {}
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Créer un compte
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Compte créé. Le refresh token est défini dans un cookie httpOnly.
+          headers:
+            Set-Cookie:
+              description: refresh_token httpOnly secure sameSite=strict
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          description: Email déjà utilisé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 409
+                code: EMAIL_TAKEN
+                message: Email already in use
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Se connecter
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Connexion réussie. Le refresh token est défini dans un cookie httpOnly.
+          headers:
+            Set-Cookie:
+              description: refresh_token httpOnly secure sameSite=strict
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          description: Identifiants invalides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 401
+                code: INVALID_CREDENTIALS
+                message: Invalid credentials
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: Renouveler les tokens (rotation)
+      operationId: refresh
+      security:
+        - cookieAuth: []
+      description: |
+        Lit le cookie `refresh_token`, émet un nouvel access token et un nouveau
+        refresh token (rotation). L'ancien token est révoqué. En cas de réutilisation
+        d'un token déjà révoqué (reuse detection), TOUS les tokens de l'utilisateur
+        sont révoqués immédiatement.
+      responses:
+        '200':
+          description: Tokens renouvelés.
+          headers:
+            Set-Cookie:
+              description: Nouveau refresh_token httpOnly
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [accessToken]
+                properties:
+                  accessToken:
+                    type: string
+        '401':
+          description: Token manquant, expiré, révoqué ou réutilisé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                missing:
+                  value: { statusCode: 401, code: INVALID_REFRESH_TOKEN, message: Missing or invalid refresh token }
+                expired:
+                  value: { statusCode: 401, code: REFRESH_TOKEN_EXPIRED, message: Refresh token has expired }
+                reused:
+                  value: { statusCode: 401, code: REFRESH_TOKEN_REUSED, message: Refresh token reuse detected }
+
+  /auth/logout:
+    post:
+      tags: [auth]
+      summary: Se déconnecter
+      operationId: logout
+      security:
+        - bearerAuth: []
+        - cookieAuth: []
+      description: Révoque le refresh token et efface le cookie. Idempotent.
+      responses:
+        '204':
+          description: Déconnexion réussie, cookie effacé.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      tags: [auth]
+      summary: Profil de l'utilisateur connecté
+      operationId: getMe
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Profil utilisateur avec famille courante (MVP — première famille)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /health:
+    get:
+      tags: []
+      summary: Statut de l'API
+      operationId: healthCheck
+      security: []
+      responses:
+        '200':
+          description: API opérationnelle
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, timestamp, uptime, version]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+                  uptime:
+                    type: number
+                    description: Secondes depuis le démarrage du process
+                  version:
+                    type: string
+                    example: 0.1.0
 
 components:
   securitySchemes:
@@ -55,4 +233,121 @@ components:
         Refresh token opaque stocké en cookie httpOnly, secure, sameSite=strict.
         Utilisé exclusivement sur POST /auth/refresh et POST /auth/logout.
 
-  schemas: {}
+    responses:
+      Unauthorized:
+        description: Token manquant ou invalide
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              statusCode: 401
+              code: UNAUTHORIZED
+              message: Unauthorized
+      ValidationError:
+        description: Corps de requête invalide
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ErrorResponse'
+            example:
+              statusCode: 400
+              code: VALIDATION_ERROR
+              message: Validation failed
+
+    schemas:
+      RegisterRequest:
+        type: object
+        required: [email, password, displayName]
+        properties:
+          email:
+            type: string
+            format: email
+            description: Transformé en minuscules, espaces supprimés.
+          password:
+            type: string
+            minLength: 8
+            maxLength: 72
+          displayName:
+            type: string
+            minLength: 1
+            maxLength: 60
+
+      LoginRequest:
+        type: object
+        required: [email, password]
+        properties:
+          email:
+            type: string
+            format: email
+          password:
+            type: string
+
+      AuthResponse:
+        type: object
+        required: [user, accessToken]
+        properties:
+          user:
+            $ref: '#/components/schemas/UserProfile'
+          accessToken:
+            type: string
+            description: JWT access token (~15 min). À mettre dans Authorization: Bearer <token>.
+
+      MeResponse:
+        type: object
+        required: [user]
+        properties:
+          user:
+            $ref: '#/components/schemas/UserProfile'
+          family:
+            $ref: '#/components/schemas/FamilyInfo'
+
+      UserProfile:
+        type: object
+        required: [id, email, displayName, createdAt]
+        properties:
+          id:
+            type: string
+          email:
+            type: string
+            format: email
+          displayName:
+            type: string
+          avatarUrl:
+            type: string
+            nullable: true
+          createdAt:
+            type: string
+            format: date-time
+
+      FamilyInfo:
+        type: object
+        required: [id, name, role]
+        properties:
+          id:
+            type: string
+          name:
+            type: string
+          role:
+            type: string
+            enum: [PARENT, CHILD, OTHER]
+
+      ErrorResponse:
+        type: object
+        required: [statusCode, code, message]
+        properties:
+          statusCode:
+            type: integer
+          code:
+            type: string
+            description: Code machine pour le traitement côté client.
+            enum:
+              - EMAIL_TAKEN
+              - INVALID_CREDENTIALS
+              - INVALID_REFRESH_TOKEN
+              - REFRESH_TOKEN_EXPIRED
+              - REFRESH_TOKEN_REUSED
+              - UNAUTHORIZED
+              - VALIDATION_ERROR
+          message:
+            type: string

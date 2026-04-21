@@ -193,6 +193,46 @@ GET    /health
 
 ---
 
+## Module Auth (`apps/backend/src/modules/auth/`)
+
+### Architecture
+
+- **Guard global** : `JwtAuthGuard` enregistré comme `APP_GUARD` dans `app.module.ts`. Toutes les routes sont protégées par défaut.
+- **Routes publiques** : décorer avec `@Public()` (depuis `auth/decorators/public.decorator.ts`). Obligatoire sur `/health`, `/auth/register`, `/auth/login`, `/auth/refresh`.
+- **Utilisateur courant** : `@CurrentUser()` injecte `{ userId, email }` (type `JwtUser`) dans les controllers.
+
+### JWT
+
+- **Access token** : JWT signé HS256, TTL `JWT_ACCESS_TTL` (défaut 15m), transmis dans `Authorization: Bearer`.
+- **Refresh token** : 32 octets aléatoires (`crypto.randomBytes(32).toString('base64url')`), 256 bits d'entropie. Seul le **SHA-256 du token** est stocké en base (`RefreshToken.tokenHash`). Le token en clair n'est jamais persisté.
+- **Cookie** : `refresh_token`, httpOnly, secure (prod uniquement), sameSite=strict, path=/api/v1/auth.
+
+### Rotation et reuse detection
+
+`AuthService.refresh(plainToken)` :
+1. Calcule `sha256(plainToken)`, cherche en base **sans** filtrer sur `revokedAt`.
+2. Si non trouvé → `INVALID_REFRESH_TOKEN`.
+3. Si trouvé mais `revokedAt != null` → **token family revocation** : `updateMany` tous les tokens de l'utilisateur (`revokedAt = now`), log `console.warn('REUSE DETECTED')`, throw `REFRESH_TOKEN_REUSED`.
+4. Si expiré (`expiresAt < now`) → `REFRESH_TOKEN_EXPIRED`.
+5. Sinon : révoque l'ancien (`update revokedAt`), crée un nouveau token, retourne nouveaux access + refresh tokens.
+
+### Helpers
+
+| Fichier | Fonctions |
+|---|---|
+| `utils/password.util.ts` | `hashPassword(plain)` — bcrypt cost 12 ; `verifyPassword(plain, hash)` |
+| `utils/tokens.util.ts` | `generateRefreshToken()` — 32 bytes base64url ; `hashToken(token)` — SHA-256 hex ; `parseTtl(ttl)` — convertit `15m`/`2h`/`30d` en ms |
+
+### getMe (MVP)
+
+Retourne l'utilisateur + première famille (`take: 1, orderBy: joinedAt asc`). Le schéma supporte plusieurs familles mais le MVP n'en expose qu'une.
+
+### Tests unitaires
+
+`auth.service.spec.ts` — 9 cas. Mocks : `hashPassword`/`verifyPassword` (module mock), `generateRefreshToken` (mock partiel, `hashToken`/`parseTtl` réels). `MOCK_TOKEN_HASH` calculé avec le vrai `crypto.createHash('sha256')`.
+
+---
+
 ## Docker — notes importantes
 
 - Tous les ports exposés bindés sur `127.0.0.1` (jamais `0.0.0.0` côté host).
@@ -200,5 +240,5 @@ GET    /health
 - `WATCHPACK_POLLING=true` dans le container web (même raison).
 - `DATABASE_URL` utilise `postgres` comme hostname (nom du service Docker), pas `localhost`.
 - `NEXT_PUBLIC_API_BASE_URL` utilise `localhost` (navigateur passe par le tunnel SSH).
-- Named volumes pour `node_modules` : évitent d'écraser les deps installées dans l'image.
+- **Volumes anonymes** pour `node_modules` (pas de nom avant `:`) : Docker initialise les volumes anonymes depuis l'image au premier démarrage, ce qui préserve les symlinks pnpm. Les volumes nommés seraient initialisés vides et écraseraiert les deps.
 - Healthchecks sur postgres (`pg_isready`) et redis (`redis-cli ping`). L'api `depends_on` les deux avec `condition: service_healthy`.
