@@ -7,6 +7,9 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { CreateFamilyDto } from './dto/create-family.dto';
 import { JoinFamilyDto } from './dto/join-family.dto';
+import { RenameFamilyDto } from './dto/rename-family.dto';
+import { ChangeMemberRoleDto } from './dto/change-member-role.dto';
+import { DeleteFamilyDto } from './dto/delete-family.dto';
 import { generateInviteCode } from './utils/invite-code.util';
 
 // ─── Shared return shape ──────────────────────────────────────────────────────
@@ -76,6 +79,22 @@ export class FamiliesService {
     }
   }
 
+  private async getFamilyOfUser(userId: string) {
+    const membership = await this.prisma.familyMember.findFirst({
+      where: { userId },
+      include: {
+        family: { include: { members: MEMBERS_INCLUDE } },
+      },
+    });
+    if (!membership) {
+      throw new NotFoundException({
+        message: "Vous n'êtes pas dans une famille",
+        code: 'NOT_IN_FAMILY',
+      });
+    }
+    return { family: membership.family as FamilyRow, membership };
+  }
+
   // ─── Public methods ──────────────────────────────────────────────────────────
 
   async createFamily(userId: string, dto: CreateFamilyDto) {
@@ -138,12 +157,10 @@ export class FamiliesService {
     return this.formatFamily(membership.family as FamilyRow);
   }
 
-  async regenerateInviteCode(userId: string, familyId: string) {
-    const membership = await this.prisma.familyMember.findUnique({
-      where: { userId_familyId: { userId, familyId } },
-    });
+  async regenerateInviteCode(userId: string) {
+    const { family, membership } = await this.getFamilyOfUser(userId);
 
-    if (!membership || membership.role !== 'PARENT') {
+    if (membership.role !== 'PARENT') {
       throw new ForbiddenException({
         message: 'Seuls les parents peuvent régénérer le code',
         code: 'FORBIDDEN_NOT_PARENT',
@@ -152,12 +169,174 @@ export class FamiliesService {
 
     const newCode = await this.generateUniqueCode();
 
-    const family = await this.prisma.family.update({
-      where: { id: familyId },
+    const updated = await this.prisma.family.update({
+      where: { id: family.id },
       data: { inviteCode: newCode },
       include: { members: MEMBERS_INCLUDE },
     });
 
-    return this.formatFamily(family as FamilyRow);
+    return this.formatFamily(updated as FamilyRow);
+  }
+
+  async leaveFamily(userId: string): Promise<void> {
+    const { family, membership } = await this.getFamilyOfUser(userId);
+
+    if (membership.role === 'PARENT') {
+      const parentCount = family.members.filter(
+        (m) => m.role === 'PARENT',
+      ).length;
+      if (parentCount === 1 && family.members.length > 1) {
+        throw new ForbiddenException({
+          message:
+            "Vous êtes le seul parent. Promouvez un autre membre avant de quitter.",
+          code: 'LAST_PARENT_CANNOT_LEAVE',
+        });
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.familyMember.delete({
+        where: { userId_familyId: { userId, familyId: family.id } },
+      });
+      // If we were the last member, cascade via Prisma onDelete would leave an
+      // empty family — delete it explicitly instead.
+      if (family.members.length === 1) {
+        await tx.family.delete({ where: { id: family.id } });
+      }
+    });
+  }
+
+  async kickMember(callerId: string, targetUserId: string) {
+    const { family, membership: callerMembership } =
+      await this.getFamilyOfUser(callerId);
+
+    if (callerMembership.role !== 'PARENT') {
+      throw new ForbiddenException({
+        message: 'Seuls les parents peuvent exclure des membres',
+        code: 'FORBIDDEN_NOT_PARENT',
+      });
+    }
+    if (callerId === targetUserId) {
+      throw new ForbiddenException({
+        message: 'Vous ne pouvez pas vous exclure vous-même',
+        code: 'CANNOT_KICK_SELF',
+      });
+    }
+
+    const targetMember = family.members.find((m) => m.userId === targetUserId);
+    if (!targetMember) {
+      throw new NotFoundException({
+        message: 'Membre introuvable',
+        code: 'MEMBER_NOT_FOUND',
+      });
+    }
+    if (targetMember.role === 'PARENT') {
+      throw new ForbiddenException({
+        message: 'Vous ne pouvez pas exclure un parent',
+        code: 'CANNOT_KICK_PARENT',
+      });
+    }
+
+    await this.prisma.familyMember.delete({
+      where: { userId_familyId: { userId: targetUserId, familyId: family.id } },
+    });
+
+    const updated = await this.prisma.family.findUniqueOrThrow({
+      where: { id: family.id },
+      include: { members: MEMBERS_INCLUDE },
+    });
+
+    return this.formatFamily(updated as FamilyRow);
+  }
+
+  async changeMemberRole(
+    callerId: string,
+    targetUserId: string,
+    dto: ChangeMemberRoleDto,
+  ) {
+    const { family, membership: callerMembership } =
+      await this.getFamilyOfUser(callerId);
+
+    if (callerMembership.role !== 'PARENT') {
+      throw new ForbiddenException({
+        message: 'Seuls les parents peuvent modifier les rôles',
+        code: 'FORBIDDEN_NOT_PARENT',
+      });
+    }
+
+    const targetMember = family.members.find((m) => m.userId === targetUserId);
+    if (!targetMember) {
+      throw new NotFoundException({
+        message: 'Membre introuvable',
+        code: 'MEMBER_NOT_FOUND',
+      });
+    }
+
+    if (targetMember.role === 'PARENT' && dto.role !== 'PARENT') {
+      const parentCount = family.members.filter(
+        (m) => m.role === 'PARENT',
+      ).length;
+      if (parentCount === 1) {
+        throw new ForbiddenException({
+          message: "Vous ne pouvez pas déclasser le dernier parent",
+          code: 'LAST_PARENT_CANNOT_DEMOTE',
+        });
+      }
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.familyMember.update({
+        where: {
+          userId_familyId: { userId: targetUserId, familyId: family.id },
+        },
+        data: { role: dto.role },
+      });
+      return tx.family.findUniqueOrThrow({
+        where: { id: family.id },
+        include: { members: MEMBERS_INCLUDE },
+      });
+    });
+
+    return this.formatFamily(updated as FamilyRow);
+  }
+
+  async renameFamily(callerId: string, dto: RenameFamilyDto) {
+    const { family, membership } = await this.getFamilyOfUser(callerId);
+
+    if (membership.role !== 'PARENT') {
+      throw new ForbiddenException({
+        message: 'Seuls les parents peuvent renommer la famille',
+        code: 'FORBIDDEN_NOT_PARENT',
+      });
+    }
+
+    const updated = await this.prisma.family.update({
+      where: { id: family.id },
+      data: { name: dto.name },
+      include: { members: MEMBERS_INCLUDE },
+    });
+
+    return this.formatFamily(updated as FamilyRow);
+  }
+
+  async deleteFamily(callerId: string, dto: DeleteFamilyDto): Promise<void> {
+    const { family, membership } = await this.getFamilyOfUser(callerId);
+
+    if (membership.role !== 'PARENT') {
+      throw new ForbiddenException({
+        message: 'Seuls les parents peuvent supprimer la famille',
+        code: 'FORBIDDEN_NOT_PARENT',
+      });
+    }
+
+    if (dto.confirmationName !== family.name) {
+      throw new ForbiddenException({
+        message: 'Le nom de confirmation ne correspond pas',
+        code: 'CONFIRMATION_MISMATCH',
+      });
+    }
+
+    // FamilyMember rows are deleted by Prisma's onDelete: Cascade
+    await this.prisma.family.delete({ where: { id: family.id } });
   }
 }

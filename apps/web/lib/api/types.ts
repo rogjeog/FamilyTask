@@ -63,3 +63,15 @@ export interface CreateFamilyInput {
 export interface JoinFamilyInput {
   inviteCode: string;
 }
+
+export interface RenameFamilyInput {
+  name: string;
+}
+
+export interface ChangeMemberRoleInput {
+  role: 'PARENT' | 'CHILD' | 'OTHER';
+}
+
+export interface DeleteFamilyInput {
+  confirmationName: string;
+}

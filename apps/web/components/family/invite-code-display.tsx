@@ -23,11 +23,10 @@ import type { Family } from '@/lib/api/types';
 
 interface Props {
   inviteCode: string;
-  familyId: string;
   isParent: boolean;
 }
 
-export function InviteCodeDisplay({ inviteCode, familyId, isParent }: Props) {
+export function InviteCodeDisplay({ inviteCode, isParent }: Props) {
   const [copied, setCopied] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const queryClient = useQueryClient();
@@ -41,7 +40,7 @@ export function InviteCodeDisplay({ inviteCode, familyId, isParent }: Props) {
   async function handleRegenerate() {
     setIsRegenerating(true);
     try {
-      const family = await regenerateInvite(familyId);
+      const family = await regenerateInvite();
       queryClient.setQueryData<Family>(['family'], family);
       toast.success('Code d\'invitation régénéré.');
     } catch (err) {
