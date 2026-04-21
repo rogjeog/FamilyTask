@@ -1,0 +1,20 @@
+{
+  "name": "familytask",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "build": "pnpm --parallel -r build",
+    "lint": "pnpm --parallel -r lint",
+    "test": "pnpm --parallel -r test",
+    "typecheck": "pnpm --parallel -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

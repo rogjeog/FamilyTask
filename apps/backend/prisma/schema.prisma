@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  PARENT
+  CHILD
+  OTHER
+}
+
+enum TaskStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COMPLETED
+  REWARDED
+}
+
+enum RedemptionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum Platform {
+  IOS
+  ANDROID
+  WEB
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  displayName  String   @map("display_name")
+  avatarUrl    String?  @map("avatar_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  familyMembers       FamilyMember[]
+  requestedTasks      Task[]               @relation("TaskRequester")
+  assignedTasks       Task[]               @relation("TaskAssignee")
+  reminderConfigs     TaskReminderConfig[]
+  taskEvents          TaskEvent[]
+  createdRewards      Reward[]
+  redemptions         RewardRedemption[]   @relation("RedemptionUser")
+  resolvedRedemptions RewardRedemption[]   @relation("RedemptionResolver")
+  pointsLedger        PointsLedger[]
+  devices             Device[]
+  refreshTokens       RefreshToken[]
+
+  @@map("users")
+}
+
+model Family {
+  id         String   @id @default(cuid())
+  name       String
+  inviteCode String   @unique @map("invite_code")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  members FamilyMember[]
+  tasks   Task[]
+  rewards Reward[]
+
+  @@map("families")
+}
+
+model FamilyMember {
+  userId   String   @map("user_id")
+  familyId String   @map("family_id")
+  role     Role     @default(CHILD)
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, familyId])
+  @@index([familyId])
+  @@map("family_members")
+}
+
+model Task {
+  id             String     @id @default(cuid())
+  familyId       String     @map("family_id")
+  requesterId    String     @map("requester_id")
+  assigneeId     String     @map("assignee_id")
+  title          String
+  description    String?
+  points         Int        @default(0)
+  dueAt          DateTime?  @map("due_at")
+  status         TaskStatus @default(PENDING)
+  recurrenceRule String?    @map("recurrence_rule")
+  proofUrl       String?    @map("proof_url")
+  createdAt      DateTime   @default(now()) @map("created_at")
+  updatedAt      DateTime   @updatedAt @map("updated_at")
+
+  family          Family               @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  requester       User                 @relation("TaskRequester", fields: [requesterId], references: [id])
+  assignee        User                 @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  reminderConfigs TaskReminderConfig[]
+  events          TaskEvent[]
+  pointsEntries   PointsLedger[]
+
+  @@index([familyId])
+  @@index([assigneeId])
+  @@index([requesterId])
+  @@index([status])
+  @@index([dueAt])
+  @@map("tasks")
+}
+
+model TaskReminderConfig {
+  id             String @id @default(cuid())
+  userId         String @map("user_id")
+  taskId         String @map("task_id")
+  offsetsMinutes Int[]  @map("offsets_minutes")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, taskId])
+  @@map("task_reminder_configs")
+}
+
+// Append-only journal — never update or delete rows
+model TaskEvent {
+  id         String      @id @default(cuid())
+  taskId     String      @map("task_id")
+  actorId    String      @map("actor_id")
+  fromStatus TaskStatus? @map("from_status")
+  toStatus   TaskStatus  @map("to_status")
+  note       String?
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  task  Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actor User @relation(fields: [actorId], references: [id])
+
+  @@index([taskId])
+  @@index([actorId, createdAt])
+  @@map("task_events")
+}
+
+model Reward {
+  id          String   @id @default(cuid())
+  familyId    String   @map("family_id")
+  name        String
+  description String?
+  costPoints  Int      @map("cost_points")
+  createdById String   @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  family      Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdBy   User               @relation(fields: [createdById], references: [id])
+  redemptions RewardRedemption[]
+
+  @@map("rewards")
+}
+
+model RewardRedemption {
+  id           String           @id @default(cuid())
+  userId       String           @map("user_id")
+  rewardId     String           @map("reward_id")
+  status       RedemptionStatus @default(PENDING)
+  resolvedById String?          @map("resolved_by_id")
+  resolvedAt   DateTime?        @map("resolved_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  user       User    @relation("RedemptionUser", fields: [userId], references: [id])
+  reward     Reward  @relation(fields: [rewardId], references: [id])
+  resolvedBy User?   @relation("RedemptionResolver", fields: [resolvedById], references: [id])
+
+  @@index([userId])
+  @@index([rewardId])
+  @@index([status])
+  @@map("reward_redemptions")
+}
+
+// Balance = SUM(delta) — never mutate directly on User
+model PointsLedger {
+  id            String   @id @default(cuid())
+  userId        String   @map("user_id")
+  delta         Int
+  reason        String
+  relatedTaskId String?  @map("related_task_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  user        User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relatedTask Task? @relation(fields: [relatedTaskId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([relatedTaskId])
+  @@map("points_ledger")
+}
+
+model Device {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  pushToken String   @map("push_token")
+  platform  Platform
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, pushToken])
+  @@index([userId])
+  @@map("devices")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String    @map("user_id")
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}

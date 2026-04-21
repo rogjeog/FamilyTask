@@ -1,0 +1,58 @@
+openapi: 3.1.0
+
+info:
+  title: FamilyTask API
+  version: 0.1.0
+  description: >
+    API de gestion de tâches familiales avec système de points et récompenses.
+    Permet aux membres d'une famille d'échanger des requêtes de tâches,
+    de suivre leur exécution et de gérer un système de récompenses.
+
+servers:
+  - url: "{protocol}://{host}/api/v1"
+    description: Serveur principal
+    variables:
+      protocol:
+        enum:
+          - https
+          - http
+        default: https
+      host:
+        default: servmoist.btsinfo.nc
+        description: Domaine du serveur (surchargeable via API_BASE_URL)
+
+tags:
+  - name: auth
+    description: Authentification, inscription, gestion des tokens
+  - name: users
+    description: Profil et préférences de l'utilisateur connecté
+  - name: families
+    description: Création, rejoindre une famille, gestion des membres
+  - name: tasks
+    description: Cycle de vie complet des tâches (création → validation → points)
+  - name: rewards
+    description: Catalogue de récompenses et demandes de rachat
+  - name: points
+    description: Solde et historique du ledger de points
+
+paths: {}
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Access token JWT (durée courte, ~15 min).
+        À transmettre dans le header Authorization: Bearer <token>.
+
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: refresh_token
+      description: >
+        Refresh token opaque stocké en cookie httpOnly, secure, sameSite=strict.
+        Utilisé exclusivement sur POST /auth/refresh et POST /auth/logout.
+
+  schemas: {}

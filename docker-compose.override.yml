@@ -1,0 +1,3 @@
+# Overrides locaux non-commités (ex: ports différents, volumes supplémentaires).
+# Copier ce fichier et ajouter les surcharges ici.
+# Ce fichier est commité vide — les vraies overrides restent sur le VPS uniquement.

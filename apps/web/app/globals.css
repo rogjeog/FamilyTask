@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Palette FamilyTask — toutes les valeurs en HSL sans le wrapper hsl()
+ * (format attendu par shadcn/ui pour les opacity modifiers Tailwind)
+ *
+ * Conversions depuis hex :
+ *   #D97757 → 15 63% 60%   (primary coral)
+ *   #C6603E → 15 54% 51%   (primary dark)
+ *   #F4E2D8 → 21 56% 90%   (primary light)
+ *   #BF4A28 → 14 65% 45%   (accent)
+ *   #FFFFFF → 0 0% 100%    (background)
+ *   #FAF9F5 → 47 33% 97%   (surface)
+ *   #EDE9DF → 43 28% 90%   (border)
+ *   #1F1E1D → 30 3% 12%    (text primary)
+ *   #6B6A68 → 30 2% 41%    (text secondary)
+ *   #2E7D5B → 154 46% 34%  (success)
+ *   #C98A2D → 36 64% 48%   (warning)
+ */
+
+@layer base {
+  :root {
+    /* ── Core shadcn tokens ── */
+    --background:    0 0% 100%;
+    --foreground:    30 3% 12%;
+
+    --card:          47 33% 97%;
+    --card-foreground: 30 3% 12%;
+
+    --popover:       0 0% 100%;
+    --popover-foreground: 30 3% 12%;
+
+    --primary:       15 63% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary:     43 28% 90%;
+    --secondary-foreground: 30 3% 12%;
+
+    --muted:         47 33% 97%;
+    --muted-foreground: 30 2% 41%;
+
+    --accent:        14 65% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive:   0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:        43 28% 90%;
+    --input:         43 28% 90%;
+    --ring:          15 63% 60%;
+
+    --radius: 0.5rem;
+
+    /* ── Custom semantic tokens ── */
+    --surface:        47 33% 97%;
+    --primary-dark:   15 54% 51%;
+    --primary-light:  21 56% 90%;
+    --success:        154 46% 34%;
+    --warning:        36 64% 48%;
+    --text-primary:   30 3% 12%;
+    --text-secondary: 30 2% 41%;
+    --border-subtle:  43 28% 90%;
+  }
+
+  .dark {
+    /* ── Core shadcn tokens (dark) ── */
+    --background:    30 3% 8%;
+    --foreground:    47 33% 95%;
+
+    --card:          30 3% 11%;
+    --card-foreground: 47 33% 95%;
+
+    --popover:       30 3% 11%;
+    --popover-foreground: 47 33% 95%;
+
+    --primary:       15 65% 63%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary:     30 3% 18%;
+    --secondary-foreground: 47 33% 95%;
+
+    --muted:         30 3% 15%;
+    --muted-foreground: 30 2% 60%;
+
+    --accent:        14 65% 52%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive:   0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border:        30 3% 20%;
+    --input:         30 3% 20%;
+    --ring:          15 65% 63%;
+
+    /* ── Custom semantic tokens (dark) ── */
+    --surface:        30 3% 11%;
+    --primary-dark:   15 54% 44%;
+    --primary-light:  21 30% 22%;
+    --success:        154 46% 42%;
+    --warning:        36 64% 54%;
+    --text-primary:   47 33% 95%;
+    --text-secondary: 30 2% 65%;
+    --border-subtle:  30 3% 20%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
