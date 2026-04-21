@@ -78,7 +78,7 @@ docker compose up api web              # foreground pour les logs
 
 Tunnel SSH depuis la machine locale :
 ```bash
-ssh -L 3000:localhost:3000 -L 3001:localhost:3001 debian@servmoist.btsinfo.nc
+ssh -L 3000:localhost:3000 -L 3001:localhost:3001 debian@servmoisst.btsinfo.nc
 ```
 
 - Frontend : http://localhost:3001
@@ -88,7 +88,7 @@ ssh -L 3000:localhost:3000 -L 3001:localhost:3001 debian@servmoist.btsinfo.nc
 
 ## Domaine / URLs
 
-- **Production** : `https://servmoist.btsinfo.nc`
+- **Production** : `https://servmoisst.btsinfo.nc`
 - **Jamais de valeur en dur** : toujours `process.env.NEXT_PUBLIC_API_BASE_URL` (frontend) ou les env vars NestJS (backend)
 - `lib/config.ts` expose `API_BASE_URL` avec fallback `http://localhost:3000/api/v1`
 

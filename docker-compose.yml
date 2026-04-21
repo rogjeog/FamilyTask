@@ -62,11 +62,10 @@ services:
       # Source (bind) — hot reload watches these
       - ./apps/backend:/app/apps/backend
       - ./packages/shared:/app/packages/shared
-      - ./package.json:/app/package.json:ro
-      - ./pnpm-workspace.yaml:/app/pnpm-workspace.yaml:ro
-      # Named volumes overlay node_modules — preserves image-installed deps
-      - backend_node_modules:/app/apps/backend/node_modules
-      - root_node_modules:/app/node_modules
+      # Anonymous volumes: Docker initialises them from the image on first start,
+      # then keeps them mounted — prevents bind mounts from wiping pnpm symlinks
+      - /app/node_modules
+      - /app/apps/backend/node_modules
     depends_on:
       postgres:
         condition: service_healthy
@@ -89,12 +88,10 @@ services:
       # Source (bind)
       - ./apps/web:/app/apps/web
       - ./packages/shared:/app/packages/shared
-      - ./package.json:/app/package.json:ro
-      - ./pnpm-workspace.yaml:/app/pnpm-workspace.yaml:ro
-      # Named volumes for deps and Next.js build cache
-      - web_node_modules:/app/apps/web/node_modules
-      - web_next:/app/apps/web/.next
-      - root_node_modules:/app/node_modules
+      # Anonymous volumes: preserve pnpm symlinks and Next.js build cache
+      - /app/node_modules
+      - /app/apps/web/node_modules
+      - /app/apps/web/.next
     depends_on:
       - api
 
@@ -102,7 +99,3 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  backend_node_modules:
-  web_node_modules:
-  web_next:
-  root_node_modules:

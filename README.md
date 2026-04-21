@@ -30,7 +30,7 @@ familytask/
 ### 1. Pré-requis
 
 - Docker + Docker Compose v2 installés sur le VPS
-- Accès SSH au VPS (`debian@servmoist.btsinfo.nc`)
+- Accès SSH au VPS (`debian@servmoisst.btsinfo.nc`)
 
 ### 2. Cloner et configurer
 
@@ -77,7 +77,7 @@ curl http://localhost:3000/api/v1/health
 Depuis ta machine locale, ouvrir un tunnel SSH :
 
 ```bash
-ssh -L 3000:localhost:3000 -L 3001:localhost:3001 debian@servmoist.btsinfo.nc
+ssh -L 3000:localhost:3000 -L 3001:localhost:3001 debian@servmoisst.btsinfo.nc
 ```
 
 Puis ouvrir dans le navigateur :

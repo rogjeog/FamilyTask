@@ -3,9 +3,12 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
+    "start:dev": "prisma generate && nest start --watch",
     "dev": "nest start --watch",
     "build": "nest build",
     "start": "node dist/main",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
     "lint": "eslint \"{src,test}/**/*.ts\"",
     "test": "jest",
     "test:watch": "jest --watch",

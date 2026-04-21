@@ -1,74 +1,62 @@
 # Build context = monorepo root (set in docker-compose)
 
-# ─── Stage 1: deps ────────────────────────────────────────────────────────────
-FROM node:20-alpine AS deps
-WORKDIR /app
-
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
-
-# Copy manifests only — layer is cached until a package.json changes
-COPY package.json pnpm-workspace.yaml ./
-COPY apps/backend/package.json ./apps/backend/
-COPY packages/shared/package.json ./packages/shared/
-
-# pnpm-lock.yaml may not exist yet on first run
-COPY pnpm-lock.yaml* ./
-
-RUN pnpm install
-
-# ─── Stage 2: dev ─────────────────────────────────────────────────────────────
+# ─── Stage 1: dev ─────────────────────────────────────────────────────────────
 FROM node:20-alpine AS dev
 WORKDIR /app
 
+# Prisma binary engines require OpenSSL on Alpine
+RUN apk add --no-cache openssl
+
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-ENV NODE_ENV=development
-# Required for file-watching on Linux bind-mount volumes
-ENV CHOKIDAR_USEPOLLING=true
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY apps/backend/package.json ./apps/backend/
+COPY packages/shared/package.json ./packages/shared/
 
-# Copy the installed workspace (node_modules + pnpm virtual store)
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/backend/node_modules ./apps/backend/node_modules 2>/dev/null || true
+RUN pnpm install
 
-# Copy full source (overridden by volume mount in docker-compose dev)
-COPY package.json pnpm-workspace.yaml ./
-COPY apps/backend ./apps/backend
-COPY packages/shared ./packages/shared
+COPY . .
+
+# Generate Prisma client so the image starts without a manual prisma generate
+RUN cd apps/backend && pnpm exec prisma generate
 
 WORKDIR /app/apps/backend
 EXPOSE 3000
-CMD ["pnpm", "dev"]
+ENV CHOKIDAR_USEPOLLING=true
+CMD ["pnpm", "start:dev"]
 
-# ─── Stage 3: build ───────────────────────────────────────────────────────────
+# ─── Stage 2: build ───────────────────────────────────────────────────────────
 FROM node:20-alpine AS build
 WORKDIR /app
 
+RUN apk add --no-cache openssl
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/apps/backend/node_modules ./apps/backend/node_modules 2>/dev/null || true
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* ./
+COPY apps/backend/package.json ./apps/backend/
+COPY packages/shared/package.json ./packages/shared/
+
+RUN pnpm install
 
 COPY . .
 
 WORKDIR /app/apps/backend
 RUN pnpm exec prisma generate && pnpm build
 
-# ─── Stage 4: prod ────────────────────────────────────────────────────────────
+# ─── Stage 3: prod ────────────────────────────────────────────────────────────
 FROM node:20-alpine AS prod
 WORKDIR /app
 
-RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
+RUN apk add --no-cache openssl
 
 ENV NODE_ENV=production
 
-# Reinstall prod-only deps from lockfile for a clean minimal image
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY apps/backend/package.json ./apps/backend/
-COPY packages/shared/package.json ./packages/shared/
-RUN pnpm install --prod --frozen-lockfile
-
+# node_modules include the generated Prisma client from the build stage
+COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 COPY --from=build /app/apps/backend/prisma ./apps/backend/prisma
+COPY package.json pnpm-workspace.yaml ./
+COPY apps/backend/package.json ./apps/backend/
 
 WORKDIR /app/apps/backend
 EXPOSE 3000
