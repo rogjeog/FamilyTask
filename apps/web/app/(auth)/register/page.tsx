@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/form';
 import { register } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
+import type { MeResponse } from '@/lib/api/types';
 
 const registerSchema = z
   .object({
@@ -65,7 +66,7 @@ export default function RegisterPage() {
         displayName: data.displayName,
         password: data.password,
       });
-      queryClient.setQueryData(['me'], { user });
+      queryClient.setQueryData<MeResponse>(['me'], { ...user, family: null });
       router.replace('/dashboard');
     } catch (err) {
       if (err instanceof ApiError && err.code === 'EMAIL_TAKEN') {

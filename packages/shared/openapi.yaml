@@ -27,7 +27,7 @@ tags:
   - name: users
     description: Profil et préférences de l'utilisateur connecté
   - name: families
-    description: Création, rejoindre une famille, gestion des membres
+    description: Créer ou rejoindre une famille, gérer les membres, régénérer le code d'invitation
   - name: tasks
     description: Cycle de vie complet des tâches (création → validation → points)
   - name: rewards
@@ -187,6 +187,126 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /families:
+    post:
+      tags: [families]
+      summary: Créer une famille
+      operationId: createFamily
+      responses:
+        '201':
+          description: Famille créée. Le créateur est automatiquement PARENT.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Family'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Utilisateur déjà dans une famille
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 409
+                code: ALREADY_IN_FAMILY
+                message: Vous êtes déjà dans une famille
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateFamilyRequest'
+
+  /families/join:
+    post:
+      tags: [families]
+      summary: Rejoindre une famille via code d'invitation
+      operationId: joinFamily
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinFamilyRequest'
+      responses:
+        '200':
+          description: Membre ajouté avec rôle CHILD. Retourne la famille complète.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Family'
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Code invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 404
+                code: INVALID_INVITE_CODE
+                message: Code d'invitation invalide
+        '409':
+          description: Déjà dans une famille
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /families/me:
+    get:
+      tags: [families]
+      summary: Famille de l'utilisateur connecté
+      operationId: getMyFamily
+      responses:
+        '200':
+          description: Famille avec tous les membres, ou null si pas encore dans une famille.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Family'
+                  - type: 'null'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /families/{id}/invite:
+    post:
+      tags: [families]
+      summary: Régénérer le code d'invitation (PARENT uniquement)
+      operationId: regenerateInviteCode
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Nouveau code généré. Retourne la famille complète mise à jour.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Family'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: L'utilisateur n'est pas PARENT de cette famille
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                statusCode: 403
+                code: FORBIDDEN_NOT_PARENT
+                message: Seuls les parents peuvent régénérer le code
+
   /health:
     get:
       tags: []
@@ -332,6 +452,62 @@ components:
             type: string
             enum: [PARENT, CHILD, OTHER]
 
+      FamilyMember:
+        type: object
+        required: [userId, displayName, role, joinedAt]
+        properties:
+          userId:
+            type: string
+          displayName:
+            type: string
+          avatarUrl:
+            type: string
+            nullable: true
+          role:
+            type: string
+            enum: [PARENT, CHILD, OTHER]
+          joinedAt:
+            type: string
+            format: date-time
+
+      Family:
+        type: object
+        required: [id, name, inviteCode, createdAt, members]
+        properties:
+          id:
+            type: string
+          name:
+            type: string
+          inviteCode:
+            type: string
+            example: ABCDEF
+          createdAt:
+            type: string
+            format: date-time
+          members:
+            type: array
+            items:
+              $ref: '#/components/schemas/FamilyMember'
+
+      CreateFamilyRequest:
+        type: object
+        required: [name]
+        properties:
+          name:
+            type: string
+            minLength: 1
+            maxLength: 60
+
+      JoinFamilyRequest:
+        type: object
+        required: [inviteCode]
+        properties:
+          inviteCode:
+            type: string
+            minLength: 6
+            maxLength: 6
+            description: 6-character code, case-insensitive (normalized to uppercase by the server).
+
       ErrorResponse:
         type: object
         required: [statusCode, code, message]
@@ -347,6 +523,9 @@ components:
               - INVALID_REFRESH_TOKEN
               - REFRESH_TOKEN_EXPIRED
               - REFRESH_TOKEN_REUSED
+              - ALREADY_IN_FAMILY
+              - INVALID_INVITE_CODE
+              - FORBIDDEN_NOT_PARENT
               - UNAUTHORIZED
               - VALIDATION_ERROR
           message:

@@ -1,12 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
 import { me } from '@/lib/api/auth';
-import type { User, FamilyInfo } from '@/lib/api/types';
+import type { User, MeResponse } from '@/lib/api/types';
 
 export interface Session {
   user: User | null;
-  family: FamilyInfo | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+}
+
+// Extracts a User from the flat MeResponse shape returned by GET /auth/me.
+function toUser(data: MeResponse): User {
+  return {
+    id: data.id,
+    email: data.email,
+    displayName: data.displayName,
+    avatarUrl: data.avatarUrl,
+    createdAt: data.createdAt,
+  };
 }
 
 export function useSession(): Session {
@@ -18,9 +28,8 @@ export function useSession(): Session {
   });
 
   return {
-    user: data?.user ?? null,
-    family: data?.family ?? null,
+    user: data ? toUser(data) : null,
     isLoading,
-    isAuthenticated: !!data?.user,
+    isAuthenticated: !!data,
   };
 }

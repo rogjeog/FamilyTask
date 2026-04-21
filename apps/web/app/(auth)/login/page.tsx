@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/form';
 import { login } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
+import type { MeResponse } from '@/lib/api/types';
 
 const loginSchema = z.object({
   email: z.string().email('Adresse e-mail invalide'),
@@ -48,7 +49,7 @@ export default function LoginPage() {
   async function onSubmit(data: LoginValues) {
     try {
       const { user } = await login(data);
-      queryClient.setQueryData(['me'], { user });
+      queryClient.setQueryData<MeResponse>(['me'], { ...user, family: null });
       router.replace('/dashboard');
     } catch (err) {
       if (err instanceof ApiError && err.code === 'INVALID_CREDENTIALS') {

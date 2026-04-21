@@ -162,6 +162,9 @@ export class AuthService {
     });
   }
 
+  // Returns a flat user object + a minimal family snapshot { id, name, role, joinedAt }.
+  // Intentionally does NOT include inviteCode or members — use GET /families/me for rich data.
+  // This keeps /auth/me fast and avoids duplicating the families query on every auth check.
   async getMe(userId: string) {
     const user = await this.prisma.user.findUniqueOrThrow({
       where: { id: userId },
