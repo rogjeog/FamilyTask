@@ -26,33 +26,50 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { login } from '@/lib/api/auth';
+import { register } from '@/lib/api/auth';
 import { ApiError } from '@/lib/api/client';
 
-const loginSchema = z.object({
-  email: z.string().email('Adresse e-mail invalide'),
-  password: z.string().min(1, 'Le mot de passe est requis'),
-});
+const registerSchema = z
+  .object({
+    email: z.string().email('Adresse e-mail invalide'),
+    displayName: z
+      .string()
+      .min(1, 'Le prénom est requis')
+      .max(60, 'Maximum 60 caractères'),
+    password: z
+      .string()
+      .min(8, 'Minimum 8 caractères')
+      .max(72, 'Maximum 72 caractères'),
+    passwordConfirm: z.string(),
+  })
+  .refine((d) => d.password === d.passwordConfirm, {
+    message: 'Les mots de passe ne correspondent pas',
+    path: ['passwordConfirm'],
+  });
 
-type LoginValues = z.infer<typeof loginSchema>;
+type RegisterValues = z.infer<typeof registerSchema>;
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const form = useForm<LoginValues>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
+  const form = useForm<RegisterValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: { email: '', displayName: '', password: '', passwordConfirm: '' },
   });
 
-  async function onSubmit(data: LoginValues) {
+  async function onSubmit(data: RegisterValues) {
     try {
-      const { user } = await login(data);
+      const { user } = await register({
+        email: data.email,
+        displayName: data.displayName,
+        password: data.password,
+      });
       queryClient.setQueryData(['me'], { user });
       router.replace('/dashboard');
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'INVALID_CREDENTIALS') {
-        form.setError('root', { message: 'Email ou mot de passe invalide' });
+      if (err instanceof ApiError && err.code === 'EMAIL_TAKEN') {
+        form.setError('email', { message: 'Cet email est déjà utilisé' });
       } else {
         toast.error('Une erreur est survenue. Veuillez réessayer.');
       }
@@ -66,20 +83,12 @@ export default function LoginPage() {
           <CardTitle className="text-3xl font-bold text-primary">
             FamilyTask
           </CardTitle>
-          <CardDescription>
-            Connectez-vous à votre espace famille
-          </CardDescription>
+          <CardDescription>Créez votre espace famille</CardDescription>
         </CardHeader>
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
             <CardContent className="space-y-4">
-              {form.formState.errors.root && (
-                <p className="text-sm text-destructive text-center rounded-md bg-destructive/10 py-2 px-3">
-                  {form.formState.errors.root.message}
-                </p>
-              )}
-
               <FormField
                 control={form.control}
                 name="email"
@@ -101,6 +110,25 @@ export default function LoginPage() {
 
               <FormField
                 control={form.control}
+                name="displayName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Prénom ou surnom</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="text"
+                        placeholder="Thomas"
+                        autoComplete="given-name"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="password"
                 render={({ field }) => (
                   <FormItem>
@@ -109,7 +137,26 @@ export default function LoginPage() {
                       <Input
                         type="password"
                         placeholder="••••••••"
-                        autoComplete="current-password"
+                        autoComplete="new-password"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="passwordConfirm"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Confirmer le mot de passe</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="password"
+                        placeholder="••••••••"
+                        autoComplete="new-password"
                         {...field}
                       />
                     </FormControl>
@@ -125,15 +172,15 @@ export default function LoginPage() {
                 className="w-full"
                 disabled={form.formState.isSubmitting}
               >
-                Se connecter
+                Créer mon compte
               </Button>
               <p className="text-sm text-text-secondary text-center">
-                Pas encore de compte ?{' '}
+                Déjà un compte ?{' '}
                 <Link
-                  href="/register"
+                  href="/login"
                   className="text-primary hover:text-primary-dark underline-offset-4 hover:underline font-medium"
                 >
-                  Créer un compte
+                  Se connecter
                 </Link>
               </p>
             </CardFooter>
