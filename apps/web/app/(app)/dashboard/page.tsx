@@ -2,8 +2,10 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { ListTodo, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { useSession } from '@/lib/auth/use-session';
@@ -13,6 +15,7 @@ import { ApiError } from '@/lib/api/client';
 import { FamilyCard } from '@/components/family/family-card';
 import { CreateFamilyDialog } from '@/components/family/create-family-dialog';
 import { JoinFamilyDialog } from '@/components/family/join-family-dialog';
+import { CreateTaskDialog } from '@/components/tasks/create-task-dialog';
 
 export default function DashboardPage() {
   // Both queries launch in parallel — no enabled: !!user dependency between them
@@ -23,6 +26,7 @@ export default function DashboardPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [createTaskOpen, setCreateTaskOpen] = useState(false);
 
   async function handleLogout() {
     try {
@@ -58,7 +62,21 @@ export default function DashboardPage() {
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           </div>
         ) : family ? (
-          <FamilyCard family={family} currentUserId={user?.id ?? ''} />
+          <>
+            <FamilyCard family={family} currentUserId={user?.id ?? ''} />
+            <div className="flex gap-3 flex-wrap">
+              <Button asChild variant="outline">
+                <Link href="/tasks">
+                  <ListTodo className="h-4 w-4 mr-2" />
+                  Voir les tâches
+                </Link>
+              </Button>
+              <Button onClick={() => setCreateTaskOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Créer une tâche
+              </Button>
+            </div>
+          </>
         ) : (
           <div className="space-y-4">
             <p className="text-text-secondary">
@@ -79,6 +97,14 @@ export default function DashboardPage() {
 
       <CreateFamilyDialog open={createOpen} onOpenChange={setCreateOpen} />
       <JoinFamilyDialog open={joinOpen} onOpenChange={setJoinOpen} />
+      {family && user && (
+        <CreateTaskDialog
+          open={createTaskOpen}
+          onOpenChange={setCreateTaskOpen}
+          members={family.members}
+          currentUserId={user.id}
+        />
+      )}
     </div>
   );
 }

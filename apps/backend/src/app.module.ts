@@ -5,10 +5,11 @@ import { PrismaModule } from './common/prisma/prisma.module';
 import { HealthModule } from './modules/health/health.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { FamiliesModule } from './modules/families/families.module';
+import { TasksModule } from './modules/tasks/tasks.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 
 @Module({
-  imports: [ConfigModule, PrismaModule, HealthModule, AuthModule, FamiliesModule],
+  imports: [ConfigModule, PrismaModule, HealthModule, AuthModule, FamiliesModule, TasksModule],
   providers: [
     {
       // All routes are JWT-protected by default.

@@ -75,3 +75,84 @@ export interface ChangeMemberRoleInput {
 export interface DeleteFamilyInput {
   confirmationName: string;
 }
+
+// ─── Task types ───────────────────────────────────────────────────────────────
+
+export type TaskStatus =
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'COMPLETED'
+  | 'REWARDED'
+  | 'REJECTED';
+
+export interface Task {
+  id: string;
+  familyId: string;
+  requesterId: string;
+  requesterName: string;
+  assigneeId: string;
+  assigneeName: string;
+  title: string;
+  description: string | null;
+  points: number;
+  dueAt: string | null;
+  status: TaskStatus;
+  recurrenceRule: string | null;
+  proofUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskEvent {
+  id: string;
+  taskId: string;
+  actorId: string;
+  actorName: string;
+  fromStatus: TaskStatus | null;
+  toStatus: TaskStatus;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface TaskWithEvents extends Task {
+  events: TaskEvent[];
+}
+
+export interface TaskReminderConfig {
+  id: string;
+  userId: string;
+  taskId: string;
+  offsetsMinutes: number[];
+}
+
+export interface CreateTaskInput {
+  assigneeId: string;
+  title: string;
+  description?: string;
+  points: number;
+  dueAt?: string;
+  recurrenceRule?: string;
+}
+
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string;
+  points?: number;
+  dueAt?: string | null;
+  recurrenceRule?: string | null;
+}
+
+export interface ListTasksQuery {
+  status?: TaskStatus[];
+  assigneeId?: string;
+  requesterId?: string;
+  dueAtFrom?: string;
+  dueAtTo?: string;
+  cursor?: string;
+  limit?: number;
+}
+
+export interface TasksPage {
+  tasks: Task[];
+  nextCursor: string | null;
+}

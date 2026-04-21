@@ -27,31 +27,28 @@ export class AuthController {
     private readonly config: ConfigService,
   ) {}
 
+  private buildCookieOptions(expiresInMs?: number) {
+    const cookieDomain = this.config.get<string>('COOKIE_DOMAIN') || undefined;
+    const isProdLike = !!cookieDomain;
+    return {
+      httpOnly: true,
+      secure: isProdLike,
+      sameSite: isProdLike ? ('lax' as const) : ('strict' as const),
+      path: '/api/v1/auth',
+      ...(cookieDomain && { domain: cookieDomain }),
+      ...(expiresInMs !== undefined && { maxAge: expiresInMs }),
+    };
+  }
+
   private setRefreshCookie(res: Response, token: string): void {
-    const isProd = this.config.get<string>('NODE_ENV') === 'production';
-    const domain = this.config.get<string>('COOKIE_DOMAIN') || undefined;
     const maxAge = parseTtl(
       this.config.get<string>('JWT_REFRESH_TTL') ?? '30d',
     );
-
-    res.cookie(REFRESH_COOKIE, token, {
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'strict',
-      path: '/api/v1/auth',
-      maxAge,
-      domain,
-    });
+    res.cookie(REFRESH_COOKIE, token, this.buildCookieOptions(maxAge));
   }
 
   private clearRefreshCookie(res: Response): void {
-    const domain = this.config.get<string>('COOKIE_DOMAIN') || undefined;
-    res.clearCookie(REFRESH_COOKIE, {
-      httpOnly: true,
-      sameSite: 'strict',
-      path: '/api/v1/auth',
-      domain,
-    });
+    res.clearCookie(REFRESH_COOKIE, this.buildCookieOptions());
   }
 
   @Public()
